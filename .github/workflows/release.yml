@@ -19,7 +19,12 @@ on:
           downloaded with actions/download-artifact@v4 with no name, so each
           artifact lands in a directory named after it: a job uploading
           `binary-<os>-<arch>` is matched by `binary-*/*`.
-        required: true
+
+          Omit it for a repository that publishes no binaries. The artifact
+          download and listing steps are then skipped outright, and the release
+          carries notes only.
+        required: false
+        default: ''
         type: string
       config-path:
         description: >-
@@ -136,12 +141,19 @@ jobs:
           echo "prerelease=${PRERELEASE}" >> "$GITHUB_OUTPUT"
           echo "changelog OK: ${BULLETS} bullet(s), ${OUR_LINKS} link(s) to ${GITHUB_REPOSITORY}, ${CMP_ALL} compare link(s)"
 
+      # Both artifact steps are skipped outright when no glob was given, rather
+      # than run with an empty value: download-artifact with nothing to download
+      # and `ls -l` with an empty pattern would each fail for the wrong reason.
+      # `Create Release` needs no such condition — softprops parses an empty
+      # `files` to an empty list and skips its upload block entirely.
       - name: Download all artifacts
+        if: inputs.artifact-glob != ''
         uses: actions/download-artifact@v4
 
       # Lists what the release will carry, and fails here rather than publishing
       # a release with no assets when the glob matches nothing.
       - name: List artifacts
+        if: inputs.artifact-glob != ''
         env:
           GLOB: ${{ inputs.artifact-glob }}
         run: |

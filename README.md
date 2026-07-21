@@ -85,13 +85,39 @@ This repository is public, so no token or secret is needed to call it.
 
 | Input | Required | Default | Meaning |
 | --- | --- | --- | --- |
-| `artifact-glob` | yes | — | Glob of downloaded artifact files to attach, passed verbatim to `softprops/action-gh-release`'s `files`. Artifacts are downloaded with `actions/download-artifact@v4` with no name, so each artifact lands in a directory named after it: a job uploading `binary-<os>-<arch>` is matched by `binary-*/*`. The glob must match at least one file or the run fails. |
+| `artifact-glob` | no | `''` | Glob of downloaded artifact files to attach, passed verbatim to `softprops/action-gh-release`'s `files`. Artifacts are downloaded with `actions/download-artifact@v4` with no name, so each artifact lands in a directory named after it: a job uploading `binary-<os>-<arch>` is matched by `binary-*/*`. When given, the glob must match at least one file or the run fails. Omit it entirely for [notes-only repositories](#notes-only-repositories). |
 | `config-path` | no | `cliff.toml` | Path to the git-cliff config inside *your* repository, as it exists at the tag being built. |
 
 Everything else is fixed by the pinned SHA: git-cliff 2.13.1, the stable-tag
 regex, `ubuntu-latest`, `fetch-depth: 0`, `softprops/action-gh-release@v2`.
 That is deliberate. Every hardcoded value is one that was verified; every input
 is a knob a consumer can turn to an unverified value.
+
+### Notes-only repositories
+
+A repository that publishes no binaries — a static site, a docs project, a
+library released elsewhere — omits `artifact-glob` and needs no build job at
+all:
+
+```yaml
+name: Release
+
+on:
+  push:
+    tags: [ 'v*' ]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    uses: rahgozar94725/release-workflows/.github/workflows/release.yml@<sha>  # v1.1.0
+```
+
+The artifact download and listing steps are then skipped outright rather than
+run with an empty value, and the release carries notes and no assets. Everything
+else — both guards, the git-cliff invocation, the pre-release detection — is
+identical.
 
 ### Your cliff.toml
 
@@ -121,7 +147,9 @@ cannot tell the difference.
    requires touching it. You bump it only when you choose to adopt a newer
    release-workflows.
 7. Set `artifact-glob` to match your own artifact names. `binary-*/*` is
-   specific to a repository whose upload jobs name artifacts `binary-…`.
+   specific to a repository whose upload jobs name artifacts `binary-…`. If your
+   project publishes no binaries, omit the input and drop the build job — see
+   [notes-only repositories](#notes-only-repositories).
 8. Push a pre-release tag first — e.g. `v0.0.1-test.1`. Then check the run log
    for the `changelog OK:` line, and check the rendered release page: group
    headings and their emoji present, one commit link per bullet pointing at

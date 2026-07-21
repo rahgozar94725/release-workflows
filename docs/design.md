@@ -249,9 +249,35 @@ invariant unless it also drives the pre-release flag. The rule instead:
 > consumer can turn to an unverified value. Widening later is backward
 > compatible, narrowing is not.
 
-An optional `artifact-glob`, for a notes-only repository with no binaries, is a
-known future input rather than a hypothetical one. It is not added yet because
-nothing currently exercises the empty-glob path, and it would ship unproven.
+An optional `artifact-glob`, for a notes-only repository with no binaries, was
+held back at v1.0.0 for exactly that reason — nothing exercised the empty-glob
+path, so it would have shipped unproven. It was added in v1.1.0 once a run
+exercised it. See "Notes-only mode" below.
+
+## Notes-only mode
+
+`artifact-glob` is optional. Omitted, it is the empty string, and the two
+artifact steps carry `if: inputs.artifact-glob != ''`.
+
+**Skipped, not run empty.** `actions/download-artifact@v4` with nothing to
+download and `ls -l` with an empty pattern would each fail for the wrong reason
+— a failure that reads as a broken workflow rather than a repository with no
+binaries.
+
+**`Create Release` needs no condition.** `softprops/action-gh-release` parses
+`files` with
+
+```typescript
+files.split(/\r?\n/).flatMap(smartSplit).filter((pat) => pat.trim() !== '')
+```
+
+so `''` yields `[]`, and the upload block is guarded by
+`if (config.input_files && config.input_files.length > 0)` — it is skipped
+entirely. No warning, no error, no assets. Leaving the step unconditional is
+what keeps the with-glob path byte-identical to v1.0.0.
+
+The `inputs` context is readable from `jobs.<job_id>.steps.*`, which is what
+makes a step-level `if` on an input legal at all.
 
 ## Proven on a runner
 
