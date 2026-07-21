@@ -1,5 +1,13 @@
-# This repository's product is shell inside YAML. A CRLF line ending in a run
-# block reaches a Linux runner as a literal \r and breaks the script, so the
-# line endings are pinned rather than left to each contributor's autocrlf.
+# Baseline: every text file is stored LF, repository-wide. Not only the
+# runner-critical extensions — a CRLF-only diff on a file nobody touched hides
+# the real changes in review and puts noise into a tagged history.
+* text=auto eol=lf
+
+# Explicit, because these two also matter at runtime: this repository's product
+# is shell inside YAML, and a CRLF line ending in a run block reaches a Linux
+# runner as a literal carriage return and breaks the script.
 *.yml text eol=lf
 *.toml text eol=lf
+
+# Explicit for documentation, which is most of this repository.
+*.md text eol=lf

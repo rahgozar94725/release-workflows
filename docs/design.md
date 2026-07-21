@@ -353,6 +353,63 @@ is supplied. `ls -l ${GLOB}`, `files: ${{ inputs.artifact-glob }}`, the
 git-cliff invocation and both guards are byte-identical, and run 29806734545
 exercised them.
 
+## Known limitation: breaking changes render as ordinary bullets
+
+`cliff.toml` defines no breaking-change group and sets
+`protect_breaking_commits = false`, so **`feat!` and `fix!` are
+indistinguishable from `feat` and `fix` in the output.** A commit that removes
+an input renders as a plain bullet under 🚀 Features, and a reader of the
+release page sees nothing marking it as breaking.
+
+Not fixed in v2.0.0. Changing `cliff.toml` means re-proving the rendering, and
+shipping what is already proven beats shipping what is tidier. v2.0.0 works
+around it by hand: the first line of its release notes states the removal and
+says no action is needed unless the reader set `config-path`.
+
+A candidate for the next version. When it is taken up, note that changing group
+names is exactly the kind of change the first-line rule exists for — every
+consumer holds its own copy of `cliff.toml`, and nothing here updates it.
+
+## A known wart on v1.0.0
+
+**`v1.0.0`'s tree contains `release-workflows.zip`, 90,723 bytes.** It was swept
+in by `git add -A` during the amend chain that produced `1e1e8af`. A second,
+larger copy — 189,186 bytes — sits in `ad7cc13`, which is an ancestor of `main`.
+Both are permanent.
+
+What is inside, audited rather than assumed:
+
+- The 7 files public at that commit, **plus
+  `docs/superpowers/specs/2026-07-21-…-design.md`** (14,170 bytes), which is
+  gitignored and published nowhere else. This is the only content in the archive
+  that is not otherwise public.
+- A complete embedded `.git`. Among its commits, **`6b37600` exists nowhere in
+  the public history** — it is the pre-amend draft of what became `1e1e8af`, so
+  the tag ships a snapshot of a commit nobody can otherwise see.
+  `93ed0a9` and `b1ebf39` are likewise orphaned amend drafts. The larger copy
+  additionally carries two stash objects (`2a0358a`, `49b7727`).
+- **No credentials.** The remote is the plain public URL, there is no embedded
+  token, and the only "token" matches anywhere are the word appearing in prose.
+
+Reachability: a consumer calling the workflow **never fetches it** — GitHub
+sends only the workflow file. But it is fully public —
+`raw.githubusercontent.com/…/v1.0.0/release-workflows.zip` returns 200, and the
+tag's auto-generated source archive includes it.
+
+**Not corrected, deliberately.** Deleting or moving the `v1.0.0` tag would
+remove nothing: consumers pin the *commit* `1e1e8af`, the blob is reachable
+through that SHA directly, and a second copy lives in `ad7cc13`. Only a history
+rewrite removes it — which changes every SHA after `ee6c17f`, breaks
+MTProto-Checker's pin, forces `v1.0.0` onto a commit that never ran, and leaves
+runs 29806734545 and 29811478962 referencing commits that no longer exist. That
+destroys the property this whole project is built on — the tag marks the commit
+that ran — to remove 90 KB of junk. GitHub also retains unreachable objects
+until asked to GC, so the rewrite would not even guarantee removal.
+
+Hygiene, not privacy. Trading a real guarantee for a cosmetic one is the wrong
+direction. Prevention instead: `*.zip` is gitignored, `git add -A` is banned in
+`CLAUDE.md`, and archives are built outside the repository.
+
 ## Notes for whoever edits this next
 
 **`v1.0.0` is a bare tag, and the README's instruction is still correct.**

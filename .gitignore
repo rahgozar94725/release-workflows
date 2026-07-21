@@ -2,3 +2,9 @@
 # live in docs/design.md instead.
 docs/superpowers/
 .agent-docs/
+
+# Archives. A downloaded release-workflows.zip was swept into commits by
+# `git add -A` twice, once into the published v1.0.0 tag — see "A known wart on
+# v1.0.0" in docs/design.md. Archives are built outside the repository now; this
+# is the backstop, because the rule alone failed twice.
+*.zip
