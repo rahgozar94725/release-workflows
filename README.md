@@ -180,7 +180,9 @@ adopting don't mention `cliff.toml`, your existing config is fine.
 | Input | Required | Default | What it does |
 | --- | --- | --- | --- |
 | `artifact-glob` | no | none | Which downloaded files to attach to the release. Omit it entirely if your project has no build artifacts. |
-| `config-path` | no | `cliff.toml` | Where your git-cliff config lives, if you keep it somewhere other than the repository root. |
+
+Your `cliff.toml` must be at the root of your repository. There is no input for
+its location.
 
 ### Writing `artifact-glob`
 

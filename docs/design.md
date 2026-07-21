@@ -251,6 +251,15 @@ invariant unless it also drives the pre-release flag. The rule instead:
 > consumer can turn to an unverified value. Widening later is backward
 > compatible, narrowing is not.
 
+**`config-path`, removed after v1.0.0.** It shipped in v1.0.0 with a default of
+`cliff.toml`, and no consumer ever set it — MTProto-Checker's caller does not
+reference it, and no run has exercised a non-default value. By the rule above it
+should never have shipped: it was a knob a consumer could turn to an unverified
+value, added for a need nobody had. Removed while the cost of removing is zero;
+widening is backward compatible, so it comes back the day someone needs it. The
+config path is once again the literal `cliff.toml`, in guard A and in the
+`-c cliff.toml` flag, both of which runs 29806734545 and 29811478962 exercised.
+
 An optional `artifact-glob`, for a notes-only repository with no binaries, was
 held back at v1.0.0 for exactly that reason — nothing exercised the empty-glob
 path, so it would have shipped unproven. It was added in v1.1.0 once a run

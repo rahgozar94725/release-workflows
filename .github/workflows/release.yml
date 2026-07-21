@@ -26,13 +26,6 @@ on:
         required: false
         default: ''
         type: string
-      config-path:
-        description: >-
-          Path to the git-cliff configuration inside the calling repository, as
-          it exists at the tag being built. Must be present — see guard A.
-        required: false
-        default: cliff.toml
-        type: string
 
 permissions:
   contents: write
@@ -72,7 +65,6 @@ jobs:
         id: changelog
         env:
           TAG: ${{ github.ref_name }}
-          CONFIG: ${{ inputs.config-path }}
         run: |
           # No `set -euo pipefail` here: pipefail would abort the step on grep's
           # empty-match exit inside the guard's pipelines, before the guard can
@@ -83,8 +75,8 @@ jobs:
           # fail when it is missing — it logs one WARN, exits 0, and renders
           # with its built-in default (no commit links, different group names).
           # An explicit -c does not change that, so guard it here.
-          if [ ! -f "${CONFIG}" ]; then
-            echo "::error::${CONFIG} not found in ${TAG}. git-cliff would fall back to its built-in default and publish notes in a different format. Tag a commit that contains ${CONFIG}."
+          if [ ! -f cliff.toml ]; then
+            echo "::error::cliff.toml not found in ${TAG}. git-cliff would fall back to its built-in default and publish notes in a different format. Tag a commit that contains cliff.toml."
             exit 1
           fi
 
@@ -109,7 +101,7 @@ jobs:
             set --
           fi
 
-          npx --yes git-cliff@2.13.1 -c "${CONFIG}" --current --use-branch-tags \
+          npx --yes git-cliff@2.13.1 -c cliff.toml --current --use-branch-tags \
             --github-repo "${GITHUB_REPOSITORY}" --offline "$@" -o RELEASE_NOTES.md
 
           # B. Assert the artifact, not just the input. Every bullet rendered by
