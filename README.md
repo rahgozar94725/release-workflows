@@ -109,7 +109,7 @@ jobs:
 
   release:
     needs: build
-    uses: rahgozar94725/release-workflows/.github/workflows/release.yml@<sha>  # v1.1.0
+    uses: rahgozar94725/release-workflows/.github/workflows/release.yml@<sha>  # v2.0.0
     with:
       artifact-glob: 'binary-*/*'
 ```
@@ -129,7 +129,7 @@ permissions:
 
 jobs:
   release:
-    uses: rahgozar94725/release-workflows/.github/workflows/release.yml@<sha>  # v1.1.0
+    uses: rahgozar94725/release-workflows/.github/workflows/release.yml@<sha>  # v2.0.0
 ```
 
 Keep `permissions: contents: write`. Without it the release cannot be created.
