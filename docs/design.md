@@ -159,9 +159,9 @@ repin, because tagging does not move the SHA.
 carries **no tag** — MTProto-Checker run 29806734545 called `1e1e8af…` before
 any tag existed on it. And it resolves when that commit is reachable **only
 from a non-default branch, and is not even that branch's tip** — run
-29811478962 called `ba7baa2…` on `feat/notes-only` while `main` pointed
-elsewhere and a later commit had already moved the branch tip past it. Both
-jobs ran.
+29811478962 called `ba7baa2…`, a commit that lived on `feat/notes-only`, had
+**never been on `main`**, carried no tag, and had already been overtaken as
+that branch's tip by a later docs commit. Both jobs ran.
 
 Nothing about the pin depends on tags, on the default branch, or on the commit
 being current. Any reachable commit SHA works, which is what makes "commit,
