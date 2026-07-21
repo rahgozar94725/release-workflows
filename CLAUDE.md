@@ -62,6 +62,45 @@ When the consuming repository is live, record its `origin/main` SHA and the md5
 and byte count of the files you touch *before* starting, and prove them
 unchanged after teardown — not merely that the branch and tag are gone.
 
+## Cutting a release of this repository
+
+Deliberately manual.
+
+- There is no push-tag trigger here. This repository's workflow is
+  `workflow_call` only, so pushing a tag runs nothing.
+- It deliberately does not call its own workflow. That would need a
+  self-referential pin to a SHA that does not exist until after the commit, and
+  a bug in the guards could block publishing the fix for that bug.
+- So release notes here are generated locally and pasted into the release.
+
+Prove the change on a runner first — see above. Tag the commit that ran.
+
+```sh
+# 1. Tag locally, so the notes can be reviewed before the tag is public.
+git tag -a vX.Y.Z <sha-that-ran>
+
+# 2. Generate notes with this repository's own cliff.toml and the workflow's flags.
+git checkout --detach vX.Y.Z
+npx --yes git-cliff@2.13.1 -c cliff.toml --current --use-branch-tags \
+  --github-repo rahgozar94725/release-workflows --offline -o /tmp/notes.md
+
+# 3. Review /tmp/notes.md. Wrong? `git tag -d vX.Y.Z` and start over.
+
+# 4. Publish.
+git push origin vX.Y.Z
+gh release create vX.Y.Z --notes-file /tmp/notes.md   # add --prerelease for rc tags
+```
+
+Two rules live in this procedure rather than in someone's memory:
+
+1. **If the version requires a matching `cliff.toml` change, say so in the first
+   line of its release notes.** Consumers hold their own copy of the config, and
+   the release notes are the only channel that tells them to update it.
+2. **Create a real GitHub release object, not just a tag.** Consumers pin this
+   repository by SHA; the releases feed is the only thing they can watch to
+   learn that a new version exists. `v1.0.0` predates this rule and has no
+   release object.
+
 ## Load-bearing rules
 
 These are decisions that look like oversights and will be "fixed" by anyone who
@@ -84,8 +123,14 @@ the short list.
 - **Never use `git add -A` here.** A `release-workflows.zip` has twice been
   swept into commits that way, and one copy is inside the published `v1.0.0`
   tag. Stage explicit paths.
-- **`.gitattributes` pins `*.yml` and `*.toml` to LF.** A CRLF inside a `run`
-  block reaches a Linux runner as a literal carriage return.
+- **`.gitattributes` pins line endings repository-wide (`* text=auto eol=lf`),
+  not just the two runner-critical extensions.** A CRLF inside a `run` block
+  reaches a Linux runner as a literal carriage return and breaks the script —
+  that is why `*.yml` and `*.toml` are also called out explicitly. But the
+  baseline is broader on review grounds: a CRLF-only diff on a file nobody
+  touched buries the real changes and puts noise into a tagged history. Scoping
+  this to the runner hazard alone was the original mistake; a docs commit once
+  showed 865 changed lines where 57 were real.
 
 ## Documentation split
 
