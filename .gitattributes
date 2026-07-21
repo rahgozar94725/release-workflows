@@ -1,0 +1,5 @@
+# This repository's product is shell inside YAML. A CRLF line ending in a run
+# block reaches a Linux runner as a literal \r and breaks the script, so the
+# line endings are pinned rather than left to each contributor's autocrlf.
+*.yml text eol=lf
+*.toml text eol=lf

@@ -1,0 +1,4 @@
+# Agent process artifacts. Kept on disk, never published — the durable findings
+# live in docs/design.md instead.
+docs/superpowers/
+.agent-docs/

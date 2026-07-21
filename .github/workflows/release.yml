@@ -1,0 +1,156 @@
+name: Release
+
+# Reusable release job: categorized, linked release notes from Conventional
+# Commits via git-cliff, then a GitHub release carrying the caller's build
+# artifacts.
+#
+# The caller keeps its own build job and its own cliff.toml. This workflow is
+# fetched by GitHub as a single file — no other file in this repository is
+# available at runtime — so the configuration it renders with is always the
+# caller's, at the tag being built.
+
+on:
+  workflow_call:
+    inputs:
+      artifact-glob:
+        description: >-
+          Glob of downloaded artifact files to attach to the release, passed
+          verbatim to softprops/action-gh-release's `files`. Artifacts are
+          downloaded with actions/download-artifact@v4 with no name, so each
+          artifact lands in a directory named after it: a job uploading
+          `binary-<os>-<arch>` is matched by `binary-*/*`.
+        required: true
+        type: string
+      config-path:
+        description: >-
+          Path to the git-cliff configuration inside the calling repository, as
+          it exists at the tag being built. Must be present — see guard A.
+        required: false
+        default: cliff.toml
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Categorized, linked notes from Conventional Commits via the caller's
+      # cliff.toml.
+      #
+      # --current scopes to the tag checkout put HEAD on. Not --latest, which
+      # means newest tag in the repo and would fill an older tag's release with
+      # a newer tag's commits when two tags land close together.
+      #
+      # --use-branch-tags limits the tag set to tags reachable from HEAD. It is
+      # what makes the very first release of a repo work: with --current alone
+      # and no previous tag, git-cliff exits 1 with "No suitable tags found"
+      # and writes no file, failing the release. Its suggested --topo-order
+      # does not fix that case; --use-branch-tags does.
+      #
+      # --github-repo/--offline are required, not cosmetic. actions/checkout
+      # leaves a detached HEAD on which git-cliff renders remote.github.owner
+      # and remote.github.repo empty, turning every link into
+      # https://github.com///commit/<sha> — exit 0, notes published, wrong.
+      # --github-repo supplies the values; without --offline alongside it,
+      # git-cliff panics on an api.github.com pulls call.
+      #
+      # Version pinned so rebuilding an old tag can never pick up rendering
+      # from a newer 2.x.
+      - name: Generate changelog
+        id: changelog
+        env:
+          TAG: ${{ github.ref_name }}
+          CONFIG: ${{ inputs.config-path }}
+        run: |
+          # No `set -euo pipefail` here: pipefail would abort the step on grep's
+          # empty-match exit inside the guard's pipelines, before the guard can
+          # report what was wrong. See "Absence of set -euo pipefail" in
+          # docs/design.md.
+
+          # A. The config must ship with the tag being built. git-cliff does not
+          # fail when it is missing — it logs one WARN, exits 0, and renders
+          # with its built-in default (no commit links, different group names).
+          # An explicit -c does not change that, so guard it here.
+          if [ ! -f "${CONFIG}" ]; then
+            echo "::error::${CONFIG} not found in ${TAG}. git-cliff would fall back to its built-in default and publish notes in a different format. Tag a commit that contains ${CONFIG}."
+            exit 1
+          fi
+
+          # One regex, used both to classify the tag and to filter git-cliff's
+          # tag set, so the two can never disagree.
+          STABLE_RE='^v[0-9]+\.[0-9]+\.[0-9]+$'
+
+          if printf '%s' "${TAG}" | grep -Eq "${STABLE_RE}"; then
+            # Stable: restrict the tag set to stable tags, so both the commit
+            # range and the compare link skip the release candidates that led
+            # here. Without this a stable tag measures only against its last rc.
+            PRERELEASE=false
+            set -- --tag-pattern "${STABLE_RE}"
+          else
+            # Pre-release: keep the full tag set, so an rc measures against the
+            # previous rc when one exists and the previous stable otherwise.
+            # --tag-pattern must NOT be used here: it removes the tag being built
+            # from the set, and git-cliff then exits 1 with "No tag exists for
+            # the current commit" and writes no file, so the step fails at the
+            # git-cliff call before B ever runs.
+            PRERELEASE=true
+            set --
+          fi
+
+          npx --yes git-cliff@2.13.1 -c "${CONFIG}" --current --use-branch-tags \
+            --github-repo "${GITHUB_REPOSITORY}" --offline "$@" -o RELEASE_NOTES.md
+
+          # B. Assert the artifact, not just the input. Every bullet rendered by
+          # a correct config carries a /commit/<sha> link under this repository;
+          # the built-in default renders none, and an empty remote renders links
+          # under the wrong owner. ALL_LINKS and OUR_LINKS stay separate because
+          # they diagnose different failures. The compare check tolerates zero
+          # and rejects wrong, which is what lets a repo's first release pass.
+          # -F throughout, so a repo name containing . or + cannot be read as a
+          # regex. The empty-GITHUB_REPOSITORY check is load-bearing: an empty
+          # value collapses EXPECTED to https://github.com/ and would match the
+          # very malformed URLs this guard exists to catch.
+          fail() { echo "::error::Generated release notes failed the shape assertion: $1"; exit 1; }
+
+          [ -n "${GITHUB_REPOSITORY:-}" ] || fail "GITHUB_REPOSITORY is empty; cannot verify link ownership"
+          EXPECTED="https://github.com/${GITHUB_REPOSITORY}"
+
+          BULLETS=$(grep -c '^- ' RELEASE_NOTES.md || true)
+          ALL_LINKS=$(grep -oE 'https://[^)]*/commit/[0-9a-f]{40}' RELEASE_NOTES.md | wc -l | tr -d ' ')
+          OUR_LINKS=$(grep -oF "${EXPECTED}/commit/" RELEASE_NOTES.md | wc -l | tr -d ' ')
+          CMP_ALL=$(grep -cF '**Full Changelog**' RELEASE_NOTES.md || true)
+          CMP_OURS=$(grep -cF "**Full Changelog**: ${EXPECTED}/compare/" RELEASE_NOTES.md || true)
+
+          [ "$BULLETS" -gt 0 ]            || fail "no bullets rendered"
+          [ "$ALL_LINKS" -eq "$BULLETS" ] || fail "${BULLETS} bullet(s) but ${ALL_LINKS} commit link(s); expected one per bullet"
+          [ "$OUR_LINKS" -eq "$BULLETS" ] || fail "${OUR_LINKS}/${BULLETS} commit link(s) point at ${EXPECTED}; the rest point elsewhere"
+          [ "$CMP_ALL" -eq "$CMP_OURS" ]  || fail "compare link does not point at ${EXPECTED}"
+
+          echo "prerelease=${PRERELEASE}" >> "$GITHUB_OUTPUT"
+          echo "changelog OK: ${BULLETS} bullet(s), ${OUR_LINKS} link(s) to ${GITHUB_REPOSITORY}, ${CMP_ALL} compare link(s)"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      # Lists what the release will carry, and fails here rather than publishing
+      # a release with no assets when the glob matches nothing.
+      - name: List artifacts
+        env:
+          GLOB: ${{ inputs.artifact-glob }}
+        run: |
+          printf 'artifact-glob: %s\n' "${GLOB}"
+          ls -l ${GLOB}
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ inputs.artifact-glob }}
+          body_path: RELEASE_NOTES.md
+          prerelease: ${{ steps.changelog.outputs.prerelease }}
