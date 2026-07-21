@@ -1,40 +1,86 @@
 # release-workflows
 
-A reusable GitHub Actions workflow that turns Conventional Commits into
-categorized, linked release notes with [git-cliff](https://git-cliff.org), then
-publishes a GitHub release with your build artifacts attached.
+Turn your commit messages into a proper GitHub release. Push a tag, get grouped
+and linked release notes with your build artifacts attached.
 
-You keep your build job. Only the release job becomes a call.
+## What you get
 
-## What it does
+Push `v1.4.0`, and the release page reads:
 
-On a tag push, the calling workflow builds and uploads artifacts as it always
-did. This workflow then:
+```markdown
+### 🚀 Features
 
-1. Checks out the caller at the tag, full history.
-2. Refuses to run if the caller's git-cliff config is missing from that tag.
-3. Renders `RELEASE_NOTES.md` with git-cliff, pinned at 2.13.1.
-4. Asserts the rendered notes are the right shape and point at the right
-   repository — see [Guards](#guards).
-5. Downloads all artifacts and creates the release, marking pre-releases
-   automatically from the tag name.
+- **api:** Add pagination to the search endpoint ([a1b2c3d](https://github.com/you/your-repo/commit/a1b2c3d…))
+- Support config files in TOML ([e4f5g6h](https://github.com/you/your-repo/commit/e4f5g6h…))
 
-## Preconditions
+### 🐛 Bug Fixes
 
-Adopt this only if all three hold. None of them are checked for you before the
-first tag push; two of them fail loudly at that point, and the first one
-degrades quietly into a Misc-only changelog.
+- **parser:** Handle empty input without panicking ([i7j8k9l](https://github.com/you/your-repo/commit/i7j8k9l…))
 
-- **Conventional Commits.** Commit subjects follow `type(scope): subject`.
-  Anything unrecognized still renders, but lands under Misc. If your history is
-  not conventional, your notes will be one flat Misc list.
-- **Tags start with `v`.** The calling workflow triggers on `push: tags: ['v*']`.
-- **Stable tags match `^v[0-9]+\.[0-9]+\.[0-9]+$`.** Exactly this. A tag matching
-  it is a stable release; anything else — `v1.2.3-rc.1`, `v1.2.3-beta`,
-  `v0.0.1-test.2` — is a pre-release. The same regex both classifies the tag and
-  filters git-cliff's tag set, so the two cannot disagree.
+### 📚 Documentation
 
-## Usage
+- Document the retry behaviour ([m0n1o2p](https://github.com/you/your-repo/commit/m0n1o2p…))
+
+**Full Changelog**: https://github.com/you/your-repo/compare/v1.3.0...v1.4.0
+```
+
+Built from your commit messages by [git-cliff](https://git-cliff.org). Every
+bullet links to its commit. Group names, order and emoji come from a `cliff.toml`
+you keep in your own repository, so you can change them without touching this.
+
+Tags like `v1.4.0-rc.1` are published as pre-releases automatically.
+
+## Before you start
+
+Three things must be true. Each one fails differently if it isn't.
+
+**Your commit messages follow [Conventional Commits](https://www.conventionalcommits.org/)** —
+`feat: …`, `fix(parser): …`, `docs: …`. Commits that don't match still appear,
+but all of them land under a single **Misc** heading. Your notes will work; they
+just won't be grouped.
+
+**Your release tags start with `v`.** The workflow is triggered by your own
+`on: push: tags: ['v*']`. A tag named `1.4.0` or `release-1.4.0` triggers
+nothing at all — no release, no error, no run.
+
+**Your stable tags look exactly like `v1.4.0`** — `v`, then three numbers
+separated by dots, and nothing else. That exact shape means a full release.
+Anything else is treated as a pre-release and gets the pre-release badge, so
+`v1.4` or `v1.4.0.1` would be published as a pre-release even if you meant it
+as a stable one.
+
+## Add it to your project
+
+### 1. Copy `cliff.toml`
+
+Copy [`cliff.toml`](cliff.toml) from this repository into the root of yours and
+commit it. It defines your group names, their order and the emoji — edit it
+freely.
+
+Two things to know:
+
+- The copy in *this* repository is a starting point only. It is never read when
+  your release runs; the workflow always uses the copy in your repository, as it
+  exists at the tag being built.
+- Don't hardcode your repository URL in it. The template derives the URL, so it
+  keeps working after a rename or a fork.
+
+### 2. Ignore the generated notes file
+
+The workflow writes `RELEASE_NOTES.md` while it runs. Add it to `.gitignore`:
+
+```gitignore
+# Generated during releases, never committed
+RELEASE_NOTES.md
+```
+
+### 3. Add the caller workflow
+
+Create `.github/workflows/release.yml` in your repository. Pick whichever shape
+matches your project.
+
+**If your project publishes binaries** — keep your build job exactly as it is,
+and replace whatever published the release with a call:
 
 ```yaml
 name: Release
@@ -48,56 +94,28 @@ permissions:
 
 jobs:
   build:
-    # ...your existing build job, unchanged, uploading artifacts...
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: make build
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-linux-amd64
+          path: dist/myapp-linux-amd64
 
   release:
     needs: build
-    uses: rahgozar94725/release-workflows/.github/workflows/release.yml@<sha>  # v1.0.0
+    uses: rahgozar94725/release-workflows/.github/workflows/release.yml@<sha>  # v1.1.0
     with:
       artifact-glob: 'binary-*/*'
 ```
 
-#### About that `<sha>`
-
-**It identifies a version of this workflow, not a version of your project.** Set
-it once. It does not change when you cut a release, and it does not change when
-you cut a hundred. Your tags, your versions and your release cadence have
-nothing to do with it.
-
-It changes only when *release-workflows* changes and **you** decide to adopt that
-change — a guard fix, a git-cliff version bump. Adoption is per project and on
-your schedule. Nothing is pushed to you, and a repository that never bumps its
-pin keeps generating notes exactly the way it does today.
-
-Where to get it: pick a tag on
-[release-workflows' releases page](https://github.com/rahgozar94725/release-workflows/releases)
-and copy the commit SHA it points at. Put the tag name in the trailing comment.
-
-**Pin by SHA, never by tag.** A ref like `@v1` is a moving target: whoever
-controls this repository can repoint it at different code, and your release
-notes would then be generated by a version you never reviewed. The comment is
-what keeps the pin readable — the SHA says what runs, the comment says what it
-is.
-
-This repository is public, so no token or secret is needed to call it.
-
-### Inputs
-
-| Input | Required | Default | Meaning |
-| --- | --- | --- | --- |
-| `artifact-glob` | no | `''` | Glob of downloaded artifact files to attach, passed verbatim to `softprops/action-gh-release`'s `files`. Artifacts are downloaded with `actions/download-artifact@v4` with no name, so each artifact lands in a directory named after it: a job uploading `binary-<os>-<arch>` is matched by `binary-*/*`. When given, the glob must match at least one file or the run fails. Omit it entirely for [notes-only repositories](#notes-only-repositories). |
-| `config-path` | no | `cliff.toml` | Path to the git-cliff config inside *your* repository, as it exists at the tag being built. |
-
-Everything else is fixed by the pinned SHA: git-cliff 2.13.1, the stable-tag
-regex, `ubuntu-latest`, `fetch-depth: 0`, `softprops/action-gh-release@v2`.
-That is deliberate. Every hardcoded value is one that was verified; every input
-is a knob a consumer can turn to an unverified value.
-
-### Notes-only repositories
-
-A repository that publishes no binaries — a static site, a docs project, a
-library released elsewhere — omits `artifact-glob` and needs no build job at
-all:
+**If your project publishes no binaries** — a static site, a docs project, a
+library released elsewhere — you need no build job at all:
 
 ```yaml
 name: Release
@@ -114,90 +132,96 @@ jobs:
     uses: rahgozar94725/release-workflows/.github/workflows/release.yml@<sha>  # v1.1.0
 ```
 
-The artifact download and listing steps are then skipped outright rather than
-run with an empty value, and the release carries notes and no assets. Everything
-else — both guards, the git-cliff invocation, the pre-release detection — is
-identical.
+Keep `permissions: contents: write`. Without it the release cannot be created.
 
-### Your cliff.toml
+### 4. Test it with a pre-release tag
 
-`cliff.toml` in this repository is a **reference copy** and is never read at
-runtime — GitHub fetches a called workflow as a single file and runs it against
-your checkout. Copy it into your repository root and commit it.
+Don't find out on a real release. Tag something disposable first:
 
-Do not hardcode your repository URL in it. The reference copy derives the URL
-from `remote.github.owner` / `remote.github.repo`, which the workflow populates
-with `--github-repo ${{ github.repository }} --offline`. A hardcoded URL keeps
-rendering the old repository's links after a fork or a rename, and the guard
-cannot tell the difference.
+```sh
+git tag v0.0.1-test.1
+git push origin v0.0.1-test.1
+```
 
-## Adoption checklist
+Then check the release page: headings and emoji present, one commit link per
+bullet pointing at your repository, a **Full Changelog** link, the pre-release
+badge, and your artifacts attached. Delete the tag and its release when you're
+happy.
 
-1. Commit history uses Conventional Commits, or you accept a Misc-only
-   changelog for the first release.
-2. Copy `cliff.toml` to your repository root and commit it. Tag a commit that
-   contains it — tags predating it cannot be released by this workflow.
-3. Confirm your release workflow triggers on `push: tags: ['v*']`.
-4. Confirm your stable tags match `^v[0-9]+\.[0-9]+\.[0-9]+$`.
-5. Keep `permissions: contents: write` in the calling workflow.
-6. Replace your release job with the `uses:` call above, pinned by SHA with the
-   version in a trailing comment. The SHA is a version of *this workflow*, taken
-   from release-workflows' releases page — you set it once and leave it. It is
-   unrelated to your own version numbers, and cutting your own releases never
-   requires touching it. You bump it only when you choose to adopt a newer
-   release-workflows.
-7. Set `artifact-glob` to match your own artifact names. `binary-*/*` is
-   specific to a repository whose upload jobs name artifacts `binary-…`. If your
-   project publishes no binaries, omit the input and drop the build job — see
-   [notes-only repositories](#notes-only-repositories).
-8. Push a pre-release tag first — e.g. `v0.0.1-test.1`. Then check the run log
-   for the `changelog OK:` line, and check the rendered release page: group
-   headings and their emoji present, one commit link per bullet pointing at
-   your repository, a **Full Changelog** compare link, the release flagged as a
-   pre-release, and your artifacts attached.
-9. Delete the test tag and its release.
+## The `<sha>` in the pin
 
-## Guards
+Replace `<sha>` with the commit SHA of a
+[release-workflows release](https://github.com/rahgozar94725/release-workflows/releases),
+and put the version in the comment beside it.
 
-Two failure modes were observed in practice, both of which exit 0 and publish
-wrong notes rather than failing.
+**That SHA is a version of this workflow, not of your project. You set it once.**
+It does not change when you cut a release, and it does not change when you cut a
+hundred. It has nothing to do with your version numbers.
 
-**Guard A — missing config.** git-cliff does not fail when its config is
-absent. It logs one WARN, exits 0, and renders with its built-in default: no
-commit links, different group names. An explicit `-c` does not change that. So
-the workflow refuses to run when `config-path` is not present at the tag.
+You change it only when this workflow gets a new version and you decide to take
+it. Nothing is pushed to you — a repository that never touches its pin keeps
+building releases exactly as it does today.
 
-**Guard B — wrong artifact.** The notes are asserted, not just the input:
+Pin the SHA rather than a tag like `@v1`. Tags can be moved; a SHA cannot, so
+your releases can never be generated by code you didn't choose.
 
-- at least one bullet was rendered;
-- one commit link per bullet;
-- every commit link points at `https://github.com/$GITHUB_REPOSITORY`;
-- the compare link, if present, points there too — zero is tolerated, since a
-  repository's first release has nothing to compare against.
+## Keeping your `cliff.toml` in step
 
-`$GITHUB_REPOSITORY` being non-empty is checked first, and that check is
-load-bearing: an empty value collapses the expected prefix to
-`https://github.com/`, which would match the very malformed URLs the guard
-exists to catch.
+Your `cliff.toml` lives in your repository and its contents are yours. Nothing
+here updates it, and nothing here reads the copy in this repository.
 
-### Fixture evidence
+That means a new version of this workflow could, in principle, expect something
+your config doesn't provide. So: **when a version needs a config change, its
+release notes say so in the first line.** If the notes for a version you're
+adopting don't mention `cliff.toml`, your existing config is fine.
 
-Seven fixtures, six distinct behaviours, run by hand against real generated
-files:
+## Inputs
 
-| Fixture | Result | Detail |
-| --- | --- | --- |
-| `v2.0.0`, normal release | PASS | 12 bullets, 12 ours, 1 compare |
-| `v1.0.0`, repository's first release | PASS | 11 bullets, 11 ours, 0 compare |
-| unset `remote.github.owner`/`repo` | FAIL | `0/12 commit link(s) point at …` |
-| config copied from another repo, wrong URL | FAIL | same message |
-| missing config, built-in default fallback | FAIL | `12 bullet(s) but 0 commit link(s)` |
-| empty notes file | FAIL | `no bullets rendered` |
-| `GITHUB_REPOSITORY` unset | FAIL | `cannot verify link ownership` |
+| Input | Required | Default | What it does |
+| --- | --- | --- | --- |
+| `artifact-glob` | no | none | Which downloaded files to attach to the release. Omit it entirely if your project has no build artifacts. |
+| `config-path` | no | `cliff.toml` | Where your git-cliff config lives, if you keep it somewhere other than the repository root. |
 
-**These are recorded evidence, not a running regression net.** They were
-verified by hand outside CI and no test suite in this repository re-runs them.
-A future edit to the guard has nothing automated to catch a regression.
+### Writing `artifact-glob`
+
+Each artifact your build job uploads is downloaded into a **directory named
+after that artifact**, so the pattern has two parts: which artifacts, then which
+files inside them.
+
+If your build uploads artifacts named `binary-linux-amd64`, `binary-darwin-arm64`
+and so on, the runner sees:
+
+```
+binary-linux-amd64/myapp-linux-amd64
+binary-darwin-arm64/myapp-darwin-arm64
+```
+
+so `binary-*/*` attaches all of them. To attach everything regardless of naming,
+use `*/*`.
+
+If the pattern matches no files, the run fails rather than publishing a release
+with nothing attached.
+
+## What the guards protect you from
+
+Two failures are possible that would otherwise publish bad notes without
+failing. The workflow stops on both.
+
+- **Your config is missing from the tag.** git-cliff would quietly fall back to
+  its own default format — different headings, no commit links — and succeed.
+  The workflow refuses to run instead. This is why a tag created before you
+  added `cliff.toml` cannot be released.
+- **The notes came out wrong.** Every bullet must carry exactly one commit link,
+  and every link must point at your repository. Notes that fail this are never
+  published.
+
+Both failures print what was wrong in the Actions log.
+
+## Why it works the way it does
+
+Every flag, guard and default here answers a failure observed in a real run.
+If you're changing this workflow rather than using it, read
+[`docs/design.md`](docs/design.md) first.
 
 ## License
 

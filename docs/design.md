@@ -376,15 +376,20 @@ conversion commit carries the derived-URL config and the `uses:` call together.
 interest only. Earlier revisions of this file described that replacement as
 future work; it has happened.
 
-## Open question
+## Permissions
 
-`permissions: contents: write` is declared at workflow level in this workflow.
-How that interacts with a caller's own `permissions` block and the caller's
-default token scope is **answered in one direction only**.
+`permissions: contents: write` is declared at workflow level here, and the
+README tells consumers to keep the same declaration in their caller. Only one
+configuration has ever run: **both present**. Runs 29806734545 and 29811478962
+each had the caller declaring it, and each published.
 
-What the run shows: the caller kept `permissions: contents: write` at its own
-workflow level, and the release published with its assets. Whether this
-workflow's own declaration suffices *without* the caller's block is **still
-unknown** — that run cannot distinguish the two, because both were present.
-Until something tests it, the adoption checklist keeps telling consumers to
-retain their block.
+**Minimality was never established.** Whether this workflow's own declaration
+suffices without the caller's is untested, and no tag will be spent proving it.
+
+The likely reason it belongs at the caller: GitHub's documentation states that
+for reusable workflows, "permissions can only be maintained or reduced—not
+elevated—throughout the chain." A called workflow can therefore narrow the
+caller's token but never widen it, so a caller whose token lacks
+`contents: write` cannot be rescued by anything declared here. That makes the
+caller's block the load-bearing one and this one a floor, which is why the
+README states it as an instruction rather than a suggestion.
