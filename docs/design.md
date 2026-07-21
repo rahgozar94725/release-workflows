@@ -327,15 +327,20 @@ newer copy of a document, trading the one property the SHA pin exists to protect
 for the least important one. **`main` is the living record**; a tag's copy is a
 snapshot.
 
-**MTProto-Checker's `edb43e0` is local-only reference material.** It is not on
-`origin` — that repository's `main` is `5b8aeb9` — and it carries the *literal*
-URL form of `cliff.toml`, hardcoding `https://github.com/rahgozar94725/MTProto-Checker`
-in the template. The remote-based form, deriving the URL from
-`remote.github.owner` / `remote.github.repo`, supersedes it. When that project
-is converted, `edb43e0` gets **replaced** rather than pushed: the conversion
-commit carries the derived-URL config and the `uses:` call together, the way the
-throwaway branch's commit did. Pushing `edb43e0` first would publish a config
-form that is already obsolete.
+**MTProto-Checker is converted. That work is complete, not pending.** Its `main`
+is `e2a068a` — "build(release): call the shared reusable release workflow" —
+parented directly on `5b8aeb9`, pinned to `1e1e8af…` (`v1.0.0`) with
+`artifact-glob: 'binary-*/*'`, and carrying the derived-URL `cliff.toml`. It is
+a **live consumer**: a mistake on that repository's `main` breaks a real release
+pipeline, so anything done there needs its pre-state recorded and its post-state
+proven, not merely its scratch branches deleted.
+
+`edb43e0`, the earlier local-only commit carrying the *literal* URL form of
+`cliff.toml`, was replaced rather than pushed, exactly as intended — the
+conversion commit carries the derived-URL config and the `uses:` call together.
+`edb43e0` is now a dangling object contained by no branch, of historical
+interest only. Earlier revisions of this file described that replacement as
+future work; it has happened.
 
 ## Open question
 
