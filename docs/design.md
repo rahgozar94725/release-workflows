@@ -284,6 +284,33 @@ third tag.
 The published body differed from the local render by exactly one byte: a
 trailing newline GitHub appends on storage.
 
+## Notes for whoever edits this next
+
+**`v1.0.0` is a bare tag, and the README's instruction is still correct.**
+No GitHub release object was created for it. GitHub serves
+`/releases/tag/<tag>` with a 200 for any tag regardless, verified for
+`v1.0.0`, so "pick a tag from the releases page and copy the commit SHA it
+points at" works as written. Do not rewrite it to point at `/tags`, and do not
+cut a release object just to make it true — it already is.
+
+**`v1.0.0`'s own copy of this file predates the post-run caveats above.** The
+tag marks `1e1e8af…`, the commit that actually ran; the caveats landed in the
+commit after it. The tag was deliberately not re-pointed at the newer commit:
+doing so would pin consumers to code no run has exercised in order to ship a
+newer copy of a document, trading the one property the SHA pin exists to protect
+for the least important one. **`main` is the living record**; a tag's copy is a
+snapshot.
+
+**MTProto-Checker's `edb43e0` is local-only reference material.** It is not on
+`origin` — that repository's `main` is `5b8aeb9` — and it carries the *literal*
+URL form of `cliff.toml`, hardcoding `https://github.com/rahgozar94725/MTProto-Checker`
+in the template. The remote-based form, deriving the URL from
+`remote.github.owner` / `remote.github.repo`, supersedes it. When that project
+is converted, `edb43e0` gets **replaced** rather than pushed: the conversion
+commit carries the derived-URL config and the `uses:` call together, the way the
+throwaway branch's commit did. Pushing `edb43e0` first would publish a config
+form that is already obsolete.
+
 ## Open question
 
 `permissions: contents: write` is declared at workflow level in this workflow.
