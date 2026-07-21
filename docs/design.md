@@ -155,15 +155,17 @@ the moment the commit does, on any branch, tagged or not. So a consumer under
 test pins the SHA directly, and tagging that same commit afterwards requires no
 repin, because tagging does not move the SHA.
 
-**Half proven.** That a reusable workflow resolves by SHA when **that commit
-carries no tag** was confirmed on a runner: MTProto-Checker run 29806734545
-called `1e1e8af…` before any tag existed on it, and the job ran. That is the
-half the circularity depended on.
+**Proven, both halves.** A reusable workflow resolves by SHA when that commit
+carries **no tag** — MTProto-Checker run 29806734545 called `1e1e8af…` before
+any tag existed on it. And it resolves when that commit is reachable **only
+from a non-default branch, and is not even that branch's tip** — run
+29811478962 called `ba7baa2…` on `feat/notes-only` while `main` pointed
+elsewhere and a later commit had already moved the branch tip past it. Both
+jobs ran.
 
-The other half stays **untested and load-bearing**: `1e1e8af…` was on this
-repository's default branch, so whether a reusable workflow can be referenced by
-a SHA reachable only from a non-default branch has never been exercised. Do not
-read the first result as covering the second.
+Nothing about the pin depends on tags, on the default branch, or on the commit
+being current. Any reachable commit SHA works, which is what makes "commit,
+test the SHA, tag that same commit afterwards" a valid order.
 
 ## Rejected shapes: where cliff.toml lives
 
@@ -309,6 +311,38 @@ third tag.
 
 The published body differed from the local render by exactly one byte: a
 trailing newline GitHub appends on storage.
+
+### Notes-only mode
+
+MTProto-Checker run
+[29811478962](https://github.com/rahgozar94725/MTProto-Checker/actions/runs/29811478962),
+tag `v0.0.1-test.3`, from a throwaway branch whose `release.yml` had **no build
+job and no `with:` block at all** — the input was omitted entirely, not passed
+empty.
+
+```
+Download all artifacts   completed/skipped
+List artifacts           completed/skipped
+Create Release           completed/success
+```
+
+Both artifact steps **skipped**, not run-and-found-nothing. The release carried
+0 assets, `prerelease: true`, and notes identical to the local render but for
+the same one trailing newline — 7 bullets across 📚 Documentation, 🏗️ Build,
+⚙️ CI and 🧹 Misc, with
+`changelog OK: 7 bullet(s), 7 link(s) to rahgozar94725/MTProto-Checker, 1 compare link(s)`.
+
+`softprops/action-gh-release` emitted **no** `does not include a valid file`
+warning, confirming the empty `files` value is filtered to an empty list rather
+than treated as a pattern that matched nothing.
+
+The with-glob path was **not** re-observed in that run — one tag exercises one
+caller. It is argued from the diff: since `v1.0.0` the workflow's only changed
+lines are one `required:` flag, an input description, five comments, and two
+`if: inputs.artifact-glob != ''` conditions that evaluate true whenever a glob
+is supplied. `ls -l ${GLOB}`, `files: ${{ inputs.artifact-glob }}`, the
+git-cliff invocation and both guards are byte-identical, and run 29806734545
+exercised them.
 
 ## Notes for whoever edits this next
 
