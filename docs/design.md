@@ -345,13 +345,33 @@ the same one trailing newline — 7 bullets across 📚 Documentation, 🏗️ B
 warning, confirming the empty `files` value is filtered to an empty list rather
 than treated as a pattern that matched nothing.
 
-The with-glob path was **not** re-observed in that run — one tag exercises one
-caller. It is argued from the diff: since `v1.0.0` the workflow's only changed
-lines are one `required:` flag, an input description, five comments, and two
-`if: inputs.artifact-glob != ''` conditions that evaluate true whenever a glob
-is supplied. `ls -l ${GLOB}`, `files: ${{ inputs.artifact-glob }}`, the
-git-cliff invocation and both guards are byte-identical, and run 29806734545
-exercised them.
+The with-glob path was not re-observed in *that* run — one tag exercises one
+caller — and for a while it was argued only from the diff. It has since been
+observed: see below.
+
+### With-glob, after config-path was removed
+
+MTProto-Checker run
+[29814878431](https://github.com/rahgozar94725/MTProto-Checker/actions/runs/29814878431),
+tag `v0.0.1-test.4`, calling `e17e401` — the commit `v2.0.0` marks. The caller
+was the converted `main` with a single line changed, the pin; `cliff.toml` was
+untouched.
+
+```
+Download all artifacts   success   ← skipped in the notes-only run
+List artifacts           success   ← skipped in the notes-only run
+Create Release           success
+```
+
+`artifact-glob: binary-*/*` listed five files and the release carried all five
+assets, with the same body-vs-local-render one-byte trailing-newline delta.
+
+This run does double duty. It is the first execution of the with-glob path since
+`artifact-glob` became optional, so the two `if:` conditions are now **observed
+in both directions** — skipped in run 29811478962, executed here, same workflow
+lineage. And it is the first execution of the workflow with `config-path`
+removed, confirming that guard A against the literal `cliff.toml` and the
+`-c cliff.toml` invocation behave exactly as the `${CONFIG}` form did.
 
 ## Known limitation: breaking changes render as ordinary bullets
 
@@ -411,6 +431,39 @@ direction. Prevention instead: `*.zip` is gitignored, `git add -A` is banned in
 `CLAUDE.md`, and archives are built outside the repository.
 
 ## Notes for whoever edits this next
+
+### Where things stand
+
+**`v2.0.0` is current.** It marks `e17e401`, has a GitHub release object, and is
+what a new consumer should pin. Both of its changes were executed by a runner
+before it was tagged: notes-only by run 29811478962, with-glob and the
+`config-path` removal by run 29814878431.
+
+**`v1.0.0` is superseded** and carries the zip wart described above. Do not
+recommend it, and do not try to clean it — that decision is recorded and
+deliberate.
+
+**MTProto-Checker is a live consumer, still pinned to `v1.0.0`, deliberately.**
+Bumping it to `v2.0.0` is **optional and buys it nothing**: it sets
+`artifact-glob`, so the optional-input change does not affect it, and it never
+set `config-path`, so the removal does not either. Its current pin is proven and
+working. Leave it unless there is a reason.
+
+### Still open
+
+- **CDN-Config-Generator has not been adopted.** It is the notes-only case this
+  feature was built for — a static site with no build artifacts. It needs its
+  own task with its own brief; its preconditions (conventional commits, a `v*`
+  tag, a `cliff.toml`) have never been checked.
+- **Breaking changes render as ordinary bullets.** `cliff.toml` has no
+  breaking-change group, so `feat!` is indistinguishable from `feat` in the
+  output. The first-line rule in the release notes is the only mitigation and it
+  is entirely manual — nothing enforces it.
+- **Whether the caller's `permissions` block is strictly required is untested.**
+  Every run so far had it present at both caller and callee. See "Permissions"
+  below.
+
+### History that still matters
 
 **`v1.0.0` is a bare tag, and the README's instruction is still correct.**
 No GitHub release object was created for it. GitHub serves
