@@ -155,10 +155,15 @@ the moment the commit does, on any branch, tagged or not. So a consumer under
 test pins the SHA directly, and tagging that same commit afterwards requires no
 repin, because tagging does not move the SHA.
 
-**Untested and load-bearing.** That a reusable workflow can be referenced by a
-SHA which is neither on the default branch nor carries a tag has not been
-confirmed on a runner. It is self-testing: if it is false, the first test call
-fails immediately and cheaply, before anything is published.
+**Half proven.** That a reusable workflow resolves by SHA when **that commit
+carries no tag** was confirmed on a runner: MTProto-Checker run 29806734545
+called `1e1e8af…` before any tag existed on it, and the job ran. That is the
+half the circularity depended on.
+
+The other half stays **untested and load-bearing**: `1e1e8af…` was on this
+repository's default branch, so whether a reusable workflow can be referenced by
+a SHA reachable only from a non-default branch has never been exercised. Do not
+read the first result as covering the second.
 
 ## Rejected shapes: where cliff.toml lives
 
@@ -248,9 +253,46 @@ An optional `artifact-glob`, for a notes-only repository with no binaries, is a
 known future input rather than a hypothetical one. It is not added yet because
 nothing currently exercises the empty-glob path, and it would ship unproven.
 
+## Proven on a runner
+
+MTProto-Checker run
+[29806734545](https://github.com/rahgozar94725/MTProto-Checker/actions/runs/29806734545),
+from a throwaway branch at tag `v0.0.1-test.2`, calling commit `1e1e8af…` —
+the commit this repository's `v1.0.0` tags.
+
+```
+changelog OK: 7 bullet(s), 7 link(s) to rahgozar94725/MTProto-Checker, 1 compare link(s)
+```
+
+Four groups rendered in prefix order — 📚 Documentation, 🏗️ Build, ⚙️ CI,
+🧹 Misc — with the emoji surviving to the rendered release page, including the
+variation selector in ⚙️. The `⚙️ CI` group was new to that render, which is
+what tested the `<!-- N -->` sort prefix on a group no earlier run had produced.
+`prerelease` was `true`, five assets matched `binary-*/*`, and `latest` still
+resolved to `v2.0.1`. The branch, tag and release were removed afterwards; the
+run log remains.
+
+**What the byte-comparison actually compared.** The published body was diffed
+against a *local render of the same seven commits*, not against the earlier
+proof run `29800347803`, whose release was deleted and whose body is not
+recoverable. Only that run's log line — `6 bullet(s), 6 commit link(s)` —
+survives, and it is consistent. The comparison is therefore evidence that the
+workflow renders what git-cliff renders locally, not that it reproduces a prior
+release byte-for-byte. Regenerating the earlier proof was judged not worth a
+third tag.
+
+The published body differed from the local render by exactly one byte: a
+trailing newline GitHub appends on storage.
+
 ## Open question
 
 `permissions: contents: write` is declared at workflow level in this workflow.
 How that interacts with a caller's own `permissions` block and the caller's
-default token scope is **not assumed**. The first real call answers it, and the
-observed result belongs here — including whether the caller needs its own block.
+default token scope is **answered in one direction only**.
+
+What the run shows: the caller kept `permissions: contents: write` at its own
+workflow level, and the release published with its assets. Whether this
+workflow's own declaration suffices *without* the caller's block is **still
+unknown** — that run cannot distinguish the two, because both were present.
+Until something tests it, the adoption checklist keeps telling consumers to
+retain their block.
