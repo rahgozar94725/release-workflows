@@ -21,27 +21,25 @@ checkout, so no sibling file in this repository exists on the runner.
 Nothing to install, nothing to run. Verification happens two ways, and only the
 second one counts as proof.
 
-### Local: render and replay the guard
+### Local: replay the changelog step
 
-Run the workflow's exact git-cliff invocation against a real repository — a
-consumer's checkout, detached at a tag, mirroring what `actions/checkout`
-produces:
+`tools/replay.sh` re-runs the workflow's entire `Generate changelog` step —
+guard A, tag classification, the git-cliff render, and guard B — against a
+consumer's clone, in a temporary worktree detached at the tag, mirroring what
+`actions/checkout` produces:
 
 ```sh
-git tag v0.0.1-testN <commit>
-git checkout --detach v0.0.1-testN
-npx --yes git-cliff@2.13.1 -c cliff.toml --current --use-branch-tags \
-  --github-repo "<owner>/<repo>" --offline -o /tmp/notes.md
+git -C <consumer-repo-path> tag v0.0.1-testN <commit>
+tools/replay.sh <consumer-repo-path> v0.0.1-testN    # third arg overrides owner/repo from origin
 ```
 
-Then replay guard B against the rendered file with `GITHUB_REPOSITORY` exported,
-copying the assertions out of the workflow. This catches render and guard
-regressions before a tag is spent, and it is how every prediction in
-`docs/design.md` was produced.
-
-The `--github-repo … --offline` pair is mandatory, not decoration. On a detached
-HEAD, git-cliff renders `remote.github.owner` and `remote.github.repo` empty and
-every link becomes `https://github.com///commit/<sha>` at exit 0.
+The script extracts the step's `run:` block out of `release.yml` at run time
+and executes it verbatim under `bash -e` (the runner's default shell — no
+pipefail). **Never copy the guard's assertions out of the workflow by hand**;
+that procedure is what this script replaced. On success the rendered notes are
+preserved to a printed temp path; on failure the worktree is kept for
+inspection. This catches render and guard regressions before a tag is spent.
+See "The replay module" in `docs/design.md` for why the seam points this way.
 
 ### On a runner: the only real proof
 
@@ -79,16 +77,16 @@ Prove the change on a runner first — see above. Tag the commit that ran.
 # 1. Tag locally, so the notes can be reviewed before the tag is public.
 git tag -a vX.Y.Z <sha-that-ran>
 
-# 2. Generate notes with this repository's own cliff.toml and the workflow's flags.
-git checkout --detach vX.Y.Z
-npx --yes git-cliff@2.13.1 -c cliff.toml --current --use-branch-tags \
-  --github-repo rahgozar94725/release-workflows --offline -o /tmp/notes.md
+# 2. Replay the changelog step against this repository itself. It renders with
+#    this repo's own cliff.toml at the tag and runs both guards; the notes land
+#    at the temp path it prints.
+tools/replay.sh . vX.Y.Z
 
-# 3. Review /tmp/notes.md. Wrong? `git tag -d vX.Y.Z` and start over.
+# 3. Review the preserved notes. Wrong? `git tag -d vX.Y.Z` and start over.
 
 # 4. Publish.
 git push origin vX.Y.Z
-gh release create vX.Y.Z --notes-file /tmp/notes.md   # add --prerelease for rc tags
+gh release create vX.Y.Z --notes-file <preserved-notes-path>   # add --prerelease for rc tags
 ```
 
 Two rules live in this procedure rather than in someone's memory:
@@ -142,3 +140,17 @@ the short list.
   changing the workflow.
 - `docs/superpowers/` and `.agent-docs/` are gitignored agent process artifacts.
   Nothing there is published; durable findings belong in `docs/design.md`.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues on rahgozar94725/release-workflows (via the `gh` CLI). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary: needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.

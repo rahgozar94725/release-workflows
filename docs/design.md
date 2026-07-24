@@ -118,6 +118,63 @@ a future edit to the guard has no automated regression net.
 | empty file | FAIL | `no bullets rendered` |
 | `GITHUB_REPOSITORY` unset | FAIL | `cannot verify link ownership` |
 
+## The replay module
+
+`tools/replay.sh` re-runs the `Generate changelog` step locally: it extracts
+the step's `run:` block out of `release.yml` at run time (selected by the
+step's `id: changelog`, via `npx js-yaml@4` and node — the same toolchain the
+step itself already requires), creates a temporary worktree of a consumer's
+clone detached at a tag, and executes the extracted script there under
+`bash -e` with `TAG`, `GITHUB_REPOSITORY`, and `GITHUB_OUTPUT` set the way the
+runner sets them. That three-key set is an invariant the script enforces, not
+a description: extraction also reads the step's `env:` map and dies, naming
+the key, if the step ever carries one the replay does not supply. The `${{ }}`
+values cannot be evaluated locally, so the key set is the contract — without
+the assertion a new env key would expand empty inside a step that has no
+`set -u`, and the replay would go green while executing something the runner
+would not.
+
+It exists because the previous local procedure required copying guard B's
+assertions out of the workflow by hand — roughly fifteen lines re-typed for
+every verification session, with nothing to notice a stale transcription. The
+replay executes the workflow's own text, so the two cannot drift; if the step
+is renamed or restructured, extraction fails loudly instead of replaying
+something stale.
+
+Decisions that look arbitrary and are not:
+
+- **The seam points from the script to the workflow, never the reverse.**
+  GitHub fetches a called workflow as a single file; no sibling file in this
+  repository exists on the runner. The workflow must never grow a reference to
+  `tools/replay.sh` or anything else here — the script reads the workflow, and
+  CI behaviour is unchanged by this module's existence.
+- **`bash -e`, not plain bash and not pipefail.** The runner's default shell
+  for an unspecified `shell:` is `bash -e {0}`; both failure cases documented
+  in "Absence of `set -euo pipefail`" depend on it, and a replay under a
+  different shell would prove nothing about the runner.
+- **`GITHUB_REPOSITORY` is derived from the consumer clone's `origin`**, with
+  an explicit third-argument override, because on a runner it is always the
+  consuming repository. A wrong value fails guard B loudly rather than passing
+  quietly.
+- **The step runs from a temp file, not `bash -c`**, matching the runner's
+  `{0}` file-argument invocation.
+- **On failure the worktree is kept** and its path printed: guard B's message
+  names the counts, but diagnosing them needs the rendered file. On success
+  the notes are preserved to a temp path and the worktree removed.
+
+Verified locally on 2026-07-24 against a synthetic consumer: a stable tag with
+config rendered 2 bullets, 2 owned links, 0 compare links, `prerelease=false`
+(guard B pass, `--tag-pattern` branch taken); a pre-release tag on a commit
+without `cliff.toml` tripped guard A with the step's own `::error::` line,
+exit 1, worktree preserved.
+
+**A green replay is not runner proof.** It shares the runner's git-cliff
+version, config, shell, and guards, but not its checkout action, environment,
+or the release publication path. The runner procedure below remains the only
+proof; the replay only decides whether a tag is worth spending on it. The
+fixture table above also remains frozen — the replay removes the hand-copy
+from the procedure, not the hand-verification from the evidence.
+
 ## Absence of `set -euo pipefail`
 
 The `Generate changelog` step runs under GitHub's default `bash -e {0}` and
