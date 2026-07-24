@@ -3,8 +3,6 @@
 Turn your commit messages into a proper GitHub release. Push a tag, get grouped
 and linked release notes with your build artifacts attached.
 
-## What you get
-
 Push `v1.4.0`, and the release page reads:
 
 ```markdown
@@ -17,37 +15,25 @@ Push `v1.4.0`, and the release page reads:
 
 - **parser:** Handle empty input without panicking ([i7j8k9l](https://github.com/you/your-repo/commit/i7j8k9l…))
 
-### 📚 Documentation
-
-- Document the retry behaviour ([m0n1o2p](https://github.com/you/your-repo/commit/m0n1o2p…))
-
 **Full Changelog**: https://github.com/you/your-repo/compare/v1.3.0...v1.4.0
 ```
 
-Built from your commit messages by [git-cliff](https://git-cliff.org). Every
-bullet links to its commit. Group names, order and emoji come from a `cliff.toml`
-you keep in your own repository, so you can change them without touching this.
-
-Tags like `v1.4.0-rc.1` are published as pre-releases automatically.
+The notes are built from your commit messages by [git-cliff](https://git-cliff.org).
+Every bullet links to its commit. Group names, order and emoji come from a
+`cliff.toml` you keep in your own repository. Tags like `v1.4.0-rc.1` are
+published as pre-releases automatically.
 
 ## Before you start
 
-Three things must be true. Each one fails differently if it isn't.
+Three things must be true. If one of them isn't, the failure it causes is
+described in [When a release goes wrong](#when-a-release-goes-wrong).
 
-**Your commit messages follow [Conventional Commits](https://www.conventionalcommits.org/)** —
-`feat: …`, `fix(parser): …`, `docs: …`. Commits that don't match still appear,
-but all of them land under a single **Misc** heading. Your notes will work; they
-just won't be grouped.
-
-**Your release tags start with `v`.** The workflow is triggered by your own
-`on: push: tags: ['v*']`. A tag named `1.4.0` or `release-1.4.0` triggers
-nothing at all — no release, no error, no run.
-
-**Your stable tags look exactly like `v1.4.0`** — `v`, then three numbers
-separated by dots, and nothing else. That exact shape means a full release.
-Anything else is treated as a pre-release and gets the pre-release badge, so
-`v1.4` or `v1.4.0.1` would be published as a pre-release even if you meant it
-as a stable one.
+- Your commit messages follow
+  [Conventional Commits](https://www.conventionalcommits.org/) —
+  `feat: …`, `fix(parser): …`, `docs: …`.
+- Your release tags start with `v`.
+- Your stable tags look exactly like `v1.4.0` — `v`, then three numbers
+  separated by dots, and nothing else.
 
 ## Add it to your project
 
@@ -55,7 +41,7 @@ as a stable one.
 
 Copy [`cliff.toml`](cliff.toml) from this repository into the root of yours and
 commit it. It defines your group names, their order and the emoji — edit it
-freely.
+freely. It must sit at the root; there is no input to put it anywhere else.
 
 Two things to know:
 
@@ -77,7 +63,8 @@ RELEASE_NOTES.md
 ### 3. Add the caller workflow
 
 Create `.github/workflows/release.yml` in your repository. Pick whichever shape
-matches your project.
+matches your project. Replace `<sha>` as described in
+[The `<sha>` in the pin](#the-sha-in-the-pin).
 
 **If your project publishes binaries** — keep your build job exactly as it is,
 and replace whatever published the release with a call:
@@ -113,6 +100,9 @@ jobs:
     with:
       artifact-glob: 'binary-*/*'
 ```
+
+The `artifact-glob` pattern is explained in
+[Attaching build artifacts](#attaching-build-artifacts).
 
 **If your project publishes no binaries** — a static site, a docs project, a
 library released elsewhere — you need no build job at all:
@@ -182,9 +172,9 @@ Dependabot understands the pin above: when this repository publishes a new
 release, it opens a pull request in your repository that updates the SHA and
 the version comment together. The PR body carries the release notes.
 
-Review and merge it yourself rather than enabling auto-merge — the first line
-of those notes is where you'd be told a `cliff.toml` change is needed, and
-that only helps if someone reads it. See the next section.
+Review and merge it yourself rather than enabling auto-merge — see
+[Keeping your `cliff.toml` in step](#keeping-your-clifftoml-in-step) for what
+to check before merging.
 
 ## Keeping your `cliff.toml` in step
 
@@ -196,16 +186,17 @@ your config doesn't provide. So: **when a version needs a config change, its
 release notes say so in the first line.** If the notes for a version you're
 adopting don't mention `cliff.toml`, your existing config is fine.
 
-## Inputs
+When the notes do mention it, the config change is your step. A pin-bump pull
+request — Dependabot's or your own — edits the `uses:` line and nothing else;
+it never touches your `cliff.toml`. Make the config change in that same pull
+request, or before merging it. Merging the new pin while the config lags is
+the one window where the two are out of step.
 
-| Input | Required | Default | What it does |
-| --- | --- | --- | --- |
-| `artifact-glob` | no | none | Which downloaded files to attach to the release. Omit it entirely if your project has no build artifacts. |
+## Attaching build artifacts
 
-Your `cliff.toml` must be at the root of your repository. There is no input for
-its location.
-
-### Writing `artifact-glob`
+One input: `artifact-glob`. It is optional and has no default — it selects
+which downloaded files to attach to the release. Omit it entirely if your
+project has no build artifacts.
 
 Each artifact your build job uploads is downloaded into a **directory named
 after that artifact**, so the pattern has two parts: which artifacts, then which
@@ -225,25 +216,39 @@ use `*/*`.
 If the pattern matches no files, the run fails rather than publishing a release
 with nothing attached.
 
-## What the guards protect you from
+## When a release goes wrong
 
-Two failures are possible that would otherwise publish bad notes without
-failing. The workflow stops on both.
+Symptoms first. Find yours.
 
-- **Your config is missing from the tag.** git-cliff would quietly fall back to
-  its own default format — different headings, no commit links — and succeed.
-  The workflow refuses to run instead. This is why a tag created before you
-  added `cliff.toml` cannot be released.
-- **The notes came out wrong.** Every bullet must carry exactly one commit link,
-  and every link must point at your repository. Notes that fail this are never
-  published.
+**You pushed a tag and nothing ran.** The tag doesn't start with `v`. The
+workflow is triggered by your own `on: push: tags: ['v*']`, so a tag named
+`1.4.0` or `release-1.4.0` triggers nothing at all — no release, no error,
+no run.
 
-Both failures print what was wrong in the Actions log.
+**The release has a pre-release badge you didn't expect.** Only the exact
+shape `v1.4.0` — `v`, three numbers, dots, nothing else — is published as a
+stable release. Anything else is treated as a pre-release, so `v1.4` or
+`v1.4.0.1` gets the badge even if you meant it as stable.
 
-## Why it works the way it does
+**Every bullet sits under a single Misc heading.** Your commit messages don't
+match Conventional Commits. Commits that don't match still appear, but they
+aren't grouped.
 
-Every flag, guard and default here answers a failure observed in a real run.
-If you're changing this workflow rather than using it, read
+**The run failed because `cliff.toml` was missing.** The config wasn't in your
+repository at the tag being built. Without this check, git-cliff would quietly
+fall back to its own default format — different headings, no commit links —
+and succeed; the workflow refuses to run instead. This is why a tag created
+before you added `cliff.toml` cannot be released.
+
+**The run failed checking the notes.** Every bullet must carry exactly one
+commit link, and every link must point at your repository. Notes that fail
+this are never published.
+
+The failed runs print what was wrong in the Actions log.
+
+---
+
+Changing this workflow rather than using it? Read
 [`docs/design.md`](docs/design.md) first.
 
 ## License
