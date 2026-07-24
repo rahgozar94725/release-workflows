@@ -52,12 +52,21 @@ build_repo() {
 # check <name> <pass|fail> <exact-line> <repo> <tag>: replay, assert the exit
 # status and the presence of the exact predicted line, then clean up whatever
 # the replay preserved (kept worktrees on failure, preserved notes on success).
+#
+# The replay is invoked by its path, not via an explicit `bash`, so a lost
+# executable bit fails here instead of on someone else's fresh clone.
+#
+# The artifact-path lines parsed below are the replay's promised interface
+# (see "The replay module" in docs/design.md). When the exit status implies an
+# artifact must exist — success implies preserved notes, a step failure
+# implies a kept worktree — a missing line is a mismatch, never a silent
+# skip: parsing that stops matching would otherwise leak litter forever.
 check() {
   NAME=$1; WANT=$2; LINE=$3; REPO=$4; TAG=$5
   TOTAL=$((TOTAL + 1))
 
   set +e
-  OUT=$(bash "$REPLAY" "$REPO" "$TAG" 2>&1)
+  OUT=$("$REPLAY" "$REPO" "$TAG" 2>&1)
   STATUS=$?
   set -e
 
@@ -68,6 +77,18 @@ check() {
   NOTES=$(printf '%s\n' "$OUT" | sed -n 's/^replay: notes preserved at //p')
   if [ -n "$NOTES" ]; then
     rm -rf "$(dirname "$NOTES")"
+  fi
+
+  BROKEN=
+  if [ "$STATUS" -eq 0 ] && [ -z "$NOTES" ]; then
+    BROKEN="exit 0 but no 'replay: notes preserved at' line"
+  elif printf '%s\n' "$OUT" | grep -q '^replay: step FAILED' && [ -z "$KEPT" ]; then
+    BROKEN="step failed but no 'replay: worktree kept for inspection:' line"
+  fi
+  if [ -n "$BROKEN" ]; then
+    echo "fixture: ${NAME} ... MISMATCH (cleanup contract: ${BROKEN})"
+    printf '%s\n' "$OUT" | sed 's/^/  | /'
+    return 0
   fi
 
   OK=no
@@ -88,6 +109,10 @@ check() {
 
 echo "fixtures: replaying the guard's behaviours (docs/design.md, Fixture evidence)"
 
+# These two replay this repository's own tags, and their expected lines name
+# the canonical slug — they assume `origin` points at
+# rahgozar94725/release-workflows. In a fork they mismatch on the slug; that
+# is this assumption surfacing, not a guard regression.
 check "normal release (this repo @ v2.0.0)" pass \
   "changelog OK: 12 bullet(s), 12 link(s) to rahgozar94725/release-workflows, 1 compare link(s)" \
   "$ROOT" v2.0.0

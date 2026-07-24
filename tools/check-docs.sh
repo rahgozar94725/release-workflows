@@ -18,6 +18,10 @@
 # cutting a release, this check fails by design — that is the tripwire
 # working. See the runbook in CLAUDE.md.
 #
+# Assumes GNU coreutils — `sort -V` does the version ordering — i.e. Git Bash
+# or Linux. BSD/macOS sort has no -V; a portable reimplementation waits for a
+# demonstrated consumer.
+#
 # Usage: tools/check-docs.sh   (no arguments; offline; exit 0 only when
 # every fact agrees)
 set -eu
@@ -47,31 +51,40 @@ single_line "$STABLE_RE" || die "cannot extract STABLE_RE from ${WORKFLOW}"
 
 # --- version-token sweeps over every tracked file ---
 
-BAD=$(git grep -nE 'git-cliff@[0-9][0-9.]*' -- . | grep -vF "git-cliff@${CLIFF_VER}" || true)
-if [ -n "$BAD" ]; then
-  drift "git-cliff version other than ${CLIFF_VER}:"
-  printf '%s\n' "$BAD" | sed 's/^/  /'
-else
-  ok "every git-cliff@ token names ${CLIFF_VER}"
-fi
+# sweep <token-ere> <ok-ere> <drift-label> <ok-label>: every token matching
+# <token-ere> in any tracked file must match <ok-ere> in full. Tokens are
+# judged one by one (git grep -o), never line-wise: a line naming both the
+# correct and a wrong version fails on the wrong token instead of hiding
+# behind the right one.
+sweep() {
+  BAD=$(git grep -noE "$1" -- . | grep -vE ":$2\$" || true)
+  if [ -n "$BAD" ]; then
+    drift "$3:"
+    printf '%s\n' "$BAD" | sed 's/^/  /'
+  else
+    ok "$4"
+  fi
+}
 
-# Prose form of the same pin. "pinned at" refers to git-cliff in both docs;
-# if a second tool ever gets described that way, split this sweep.
-BAD=$(git grep -nE 'pinned at [0-9][0-9.]*' -- . | grep -vF "pinned at ${CLIFF_VER}" || true)
-if [ -n "$BAD" ]; then
-  drift "'pinned at' version other than ${CLIFF_VER}:"
-  printf '%s\n' "$BAD" | sed 's/^/  /'
-else
-  ok "every 'pinned at' claim names ${CLIFF_VER}"
-fi
+esc() { printf '%s' "$1" | sed 's/\./\\./g'; }
+CLIFF_ESC=$(esc "$CLIFF_VER")
+JSYAML_ESC=$(esc "$JSYAML_VER")
 
-BAD=$(git grep -nE 'js-yaml@[0-9][0-9.]*' -- . | grep -vF "js-yaml@${JSYAML_VER}" || true)
-if [ -n "$BAD" ]; then
-  drift "js-yaml version other than ${JSYAML_VER}:"
-  printf '%s\n' "$BAD" | sed 's/^/  /'
-else
-  ok "every js-yaml@ token names ${JSYAML_VER}"
-fi
+sweep 'git-cliff@[0-9][0-9.]*' "git-cliff@${CLIFF_ESC}" \
+  "git-cliff version other than ${CLIFF_VER}" \
+  "every git-cliff@ token names ${CLIFF_VER}"
+
+# Prose form of the same pin, with or without a v prefix — an editor adding a
+# v must not exempt a claim from the sweep. "pinned at" refers to git-cliff
+# in both docs; if a second tool ever gets described that way, split this
+# sweep.
+sweep 'pinned at v?[0-9][0-9.]*' "pinned at v?${CLIFF_ESC}" \
+  "'pinned at' version other than ${CLIFF_VER}" \
+  "every 'pinned at' claim names ${CLIFF_VER}"
+
+sweep 'js-yaml@[0-9][0-9.]*' "js-yaml@${JSYAML_ESC}" \
+  "js-yaml version other than ${JSYAML_VER}" \
+  "every js-yaml@ token names ${JSYAML_VER}"
 
 # --- STABLE_RE quoted in the design record ---
 

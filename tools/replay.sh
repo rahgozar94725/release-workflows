@@ -55,7 +55,7 @@ printf '%s' "$SLUG" | grep -Eq '^[^/]+/[^/]+$' \
 # values cannot be evaluated locally, so the key set is the contract, and a
 # new env key must fail here — not expand empty inside a step that has no
 # `set -u` while the replay goes green.
-STEP=$(npx --yes js-yaml@4 "$WORKFLOW" | node -e '
+STEP=$(npx --yes js-yaml@4.3.0 "$WORKFLOW" | node -e '
   const doc = JSON.parse(require("fs").readFileSync(0, "utf8"));
   const step = doc.jobs.release.steps.find(s => s.id === "changelog");
   if (!step || !step.run) { console.error("no run block on a step with id \"changelog\""); process.exit(1); }
@@ -71,6 +71,10 @@ STEP=$(npx --yes js-yaml@4 "$WORKFLOW" | node -e '
 git -C "$REPO" worktree prune
 
 BASE=$(mktemp -d "${TMPDIR:-/tmp}/replay.XXXXXX")
+# Armed only until the step starts: a death before then (worktree add, file
+# writes) must leave no temp litter. Once the step runs, the keep-on-failure /
+# clean-on-success branches below own the artifacts, so the trap is disarmed.
+trap 'rm -rf "$BASE"' EXIT
 WT="${BASE}/worktree"
 OUT="${BASE}/github_output"
 printf '%s\n' "$STEP" > "${BASE}/step.sh"
@@ -81,12 +85,18 @@ git -C "$REPO" worktree add --detach "$WT" "$TAG" >/dev/null
 echo "replay: ${SLUG} @ ${TAG}"
 echo "---"
 
+trap - EXIT
 set +e
 ( cd "$WT" && TAG="$TAG" GITHUB_REPOSITORY="$SLUG" GITHUB_OUTPUT="$OUT" bash -e "${BASE}/step.sh" )
 STATUS=$?
 set -e
 
 echo "---"
+# The two artifact-path lines below — "worktree kept for inspection: " and
+# "notes preserved at " — are interface, not decoration: tools/fixtures/run.sh
+# parses them to find what to clean up, and treats their absence as a failure.
+# Rewording either is a breaking change. See "The replay module" in
+# docs/design.md.
 if [ "$STATUS" -ne 0 ]; then
   echo "replay: step FAILED with exit ${STATUS}" >&2
   echo "replay: worktree kept for inspection: ${WT}" >&2

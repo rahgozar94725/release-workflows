@@ -117,6 +117,14 @@ consumer file. The `GITHUB_REPOSITORY`-unset row stays hand-verified only,
 deliberately: `replay.sh` validates the slug before the step runs, and
 machinery to bypass that would outweigh the one guard line it protects.
 
+A non-bug in the harness, recorded so nobody "fixes" it: `check()` asserts
+each expectation with an AND-list inside a `case` arm
+(`[ ... ] && grep ... && OK=yes`) while the script runs under `set -e`. That
+is exempt from errexit by POSIX's AND-OR-list rule — a failing `[` or `grep`
+there does not kill the script, it just leaves `OK=no` — and the sabotage run
+exercised exactly that path empirically. Rewriting it into `if` chains out of
+errexit fear would churn a construct that is both correct and proven.
+
 | Fixture | Result | Detail |
 | --- | --- | --- |
 | `v2.0.0`, normal release | PASS | 12 bullets, 12 ours, 1 compare |
@@ -131,7 +139,7 @@ machinery to bypass that would outweigh the one guard line it protects.
 
 `tools/replay.sh` re-runs the `Generate changelog` step locally: it extracts
 the step's `run:` block out of `release.yml` at run time (selected by the
-step's `id: changelog`, via `npx js-yaml@4` and node — the same toolchain the
+step's `id: changelog`, via `npx js-yaml@4.3.0` and node — the same toolchain the
 step itself already requires), creates a temporary worktree of a consumer's
 clone detached at a tag, and executes the extracted script there under
 `bash -e` with `TAG`, `GITHUB_REPOSITORY`, and `GITHUB_OUTPUT` set the way the
@@ -170,6 +178,24 @@ Decisions that look arbitrary and are not:
 - **On failure the worktree is kept** and its path printed: guard B's message
   names the counts, but diagnosing them needs the rendered file. On success
   the notes are preserved to a temp path and the worktree removed.
+- **Two output lines are interface, not decoration.** `replay: worktree kept
+  for inspection: <path>` (step failure) and `replay: notes preserved at
+  <path>` (success) are stable, machine-consumable output:
+  `tools/fixtures/run.sh` parses them to find what to clean up, and treats
+  their absence — when the exit status implies the artifact must exist — as a
+  mismatch. Rewording either line is a breaking change to the replay's
+  contract, not a cosmetic edit. The wording is pinned here precisely because
+  the earlier arrangement — harness parsing lines the replay never promised —
+  could be broken by an innocent rewording with no alarm anywhere.
+- **The temp directory is trap-cleaned until the step starts.** A death
+  before the step executes (worktree add, file writes) removes the temp base;
+  from the moment the step runs, the keep-on-failure / clean-on-success
+  branches own the artifacts and the trap is disarmed. Early deaths leave no
+  litter; failed steps keep exactly what the failure message names.
+- **`js-yaml` is pinned exact (`4.3.0`), matching the git-cliff precedent:**
+  replaying the same tag on two machines or two dates must run an identical
+  extraction. `tools/check-docs.sh` derives the version from `replay.sh`
+  rather than re-typing it, so tightening the pin needs no change there.
 
 Verified locally on 2026-07-24 against a synthetic consumer: a stable tag with
 config rendered 2 bullets, 2 owned links, 0 compare links, `prerelease=false`
