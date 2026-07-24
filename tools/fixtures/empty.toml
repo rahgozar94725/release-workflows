@@ -1,0 +1,23 @@
+# FIXTURE — not a working configuration. Rigged copy of the repository's
+# cliff.toml whose body renders nothing, producing an empty notes file at
+# exit 0. Guard B must fail with "no bullets rendered".
+
+[changelog]
+header = ""
+body = ""
+footer = ""
+trim = true
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+filter_commits = false
+
+commit_parsers = [
+  { message = ".*", group = "<!-- 8 -->🧹 Misc" },
+]
+
+protect_breaking_commits = false
+split_commits = false
+topo_order = false
+sort_commits = "oldest"

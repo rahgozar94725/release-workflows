@@ -104,9 +104,18 @@ passes precisely when it should fail.
 
 ### Fixture evidence
 
-Seven fixtures, six distinct behaviours, run by hand against real generated
-files. **Hand-verified outside CI. Nothing in this repository re-runs them**, so
-a future edit to the guard has no automated regression net.
+Seven fixtures, six distinct behaviours, originally run by hand against real
+generated files; the table records that original evidence. Since 2026-07-24,
+`tools/fixtures/run.sh` re-runs six of the seven behaviours through the replay
+module and asserts the exact count-bearing lines — a future edit to the guard
+now has a regression net. Two honesty notes on substrate: the FAIL rows run
+against synthetic repositories whose rigged configs (`tools/fixtures/*.toml`)
+legitimately reproduce each observable, because the step as a whole cannot
+render one artifact and assert against another; and the first-release row
+replays this repository's own `v1.0.0` (2 bullets), not the original 11-bullet
+consumer file. The `GITHUB_REPOSITORY`-unset row stays hand-verified only,
+deliberately: `replay.sh` validates the slug before the step runs, and
+machinery to bypass that would outweigh the one guard line it protects.
 
 | Fixture | Result | Detail |
 | --- | --- | --- |
@@ -171,9 +180,9 @@ exit 1, worktree preserved.
 **A green replay is not runner proof.** It shares the runner's git-cliff
 version, config, shell, and guards, but not its checkout action, environment,
 or the release publication path. The runner procedure below remains the only
-proof; the replay only decides whether a tag is worth spending on it. The
-fixture table above also remains frozen — the replay removes the hand-copy
-from the procedure, not the hand-verification from the evidence.
+proof; the replay only decides whether a tag is worth spending on it.
+`tools/fixtures/run.sh` re-runs the fixture behaviours on top of this module —
+see "Fixture evidence" above for what it covers and what stays frozen.
 
 ## Absence of `set -euo pipefail`
 

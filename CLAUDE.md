@@ -41,6 +41,11 @@ preserved to a printed temp path; on failure the worktree is kept for
 inspection. This catches render and guard regressions before a tag is spent.
 See "The replay module" in `docs/design.md` for why the seam points this way.
 
+`tools/fixtures/run.sh` re-runs the guard's fixture behaviours through the
+replay (six of seven — see "Fixture evidence" in `docs/design.md`). Run it
+before and after any edit to the changelog step; it is the regression net the
+fixture table used to only describe.
+
 ### On a runner: the only real proof
 
 Nothing here is believed until a runner has run it. The established procedure:
