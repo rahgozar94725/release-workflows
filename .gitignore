@@ -3,6 +3,12 @@
 docs/superpowers/
 .agent-docs/
 
+# Claude Code machine-local settings. Deliberately just the local file, not the
+# whole directory: a shared .claude/settings.json, if one ever exists, belongs
+# in history. Without this line the file is only hidden by whatever global
+# ignore a given machine happens to have.
+.claude/settings.local.json
+
 # Archives. A downloaded release-workflows.zip was swept into commits by
 # `git add -A` twice, once into the published v1.0.0 tag — see "A known wart on
 # v1.0.0" in docs/design.md. Archives are built outside the repository now; this
