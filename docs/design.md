@@ -292,6 +292,56 @@ Nothing about the pin depends on tags, on the default branch, or on the commit
 being current. Any reachable commit SHA works, which is what makes "commit,
 test the SHA, tag that same commit afterwards" a valid order.
 
+### Keeping consumer pins current
+
+Decided 2026-07, when nine post-`v2.0.0` commits (an architecture review and a
+hardening pass) had left `release.yml` byte-identical to the release and made
+the cost of hand-edited pins visible in a case where paying it bought nothing.
+
+- **The pin convention itself is unchanged.** A moving ref (`@v2`, `@main`) was
+  reconsidered and re-rejected for the reasons above — it lets this repository
+  repoint consumers at code they never reviewed, and the consumer's history
+  stops saying what ran. What changes is who edits the literal, not what the
+  literal is.
+- **Dependabot edits it.** Each subscribed consumer carries a
+  `.github/dependabot.yml` with the `github-actions` ecosystem. Dependabot
+  understands a reusable-workflow `uses:` line held at a SHA with a trailing
+  version comment and updates both together, so the convention README documents
+  survives verbatim. Chosen over a fan-out script from this repository (which
+  would need a cross-repo token, a consumer registry that can drift, and new
+  unproven shell in the most privileged position in the system) and over
+  Renovate (nothing at this scale needs its surface).
+- **A human merges every bump PR; auto-merge stays off.** The rule that a
+  config-affecting release announces itself in the first line of its notes
+  terminates in a human *reading* those notes. Dependabot copies the release
+  notes into the PR body, which is exactly where that reader is; unattended
+  merging would sever the only channel that keeps consumer `cliff.toml` copies
+  in step.
+- **Releases are cut only for consumer-visible change.** The runbook gates on
+  it: if `release.yml` and `cliff.toml` both match the last stable tag, nothing
+  is released. So every bump PR corresponds to a real consumer-visible change —
+  but of one of two kinds. Either the fetched `release.yml` blob differs, and
+  merging changes what runs; or the release is `cliff.toml`-only, the pin bump
+  itself is cosmetic, and the PR's job is to carry the first-line config
+  warning to a reader. In that second case the notice channel is the whole
+  point of the PR. Corollary: two consumers whose SHAs differ but resolve to
+  identical `release.yml` blobs are not meaningfully diverged — the single
+  fetched file is the entire product, and a version comment beside an
+  equivalent SHA is cosmetic.
+- **MTProto-Checker carries no Dependabot config, deliberately.** Its pin is
+  frozen by decision (see below — a bump buys it nothing). Subscribing it would
+  turn that settled decision into a fresh per-release question in PR form. The
+  omission is not an oversight; do not "fix" it.
+- **`tools/check-docs.sh` is deliberately unchanged.** The convention adds no
+  drift-prone literal: the README snippet holds no version number, and the pin
+  comment format the check already asserts is untouched. There is nothing new
+  to assert, and that was checked rather than assumed.
+- **The proof gate does not move.** A bump PR points a consumer at a blob a
+  runner already executed before the tag existed, and its first execution *in
+  that consumer* still happens at that consumer's next release tag — exactly
+  as with a hand edit. Open, unmerged bump PRs are the divergence signal;
+  there is no separate fleet-consistency check, accepted at current scale.
+
 ## Rejected shapes: where cliff.toml lives
 
 Three shapes were weighed. They differ only in where the git-cliff

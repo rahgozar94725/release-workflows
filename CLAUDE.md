@@ -84,6 +84,11 @@ Deliberately manual.
 Prove the change on a runner first — see above. Tag the commit that ran.
 
 ```sh
+# 0. Gate: a release must carry a consumer-visible change. Diff the two
+#    consumer-visible files against the last stable tag; an empty diff means
+#    there is nothing to release — stop here.
+git diff <last-stable-tag> -- .github/workflows/release.yml cliff.toml
+
 # 1. Tag locally, so the notes can be reviewed before the tag is public.
 git tag -a vX.Y.Z <sha-that-ran>
 
@@ -113,6 +118,14 @@ Two rules live in this procedure rather than in someone's memory:
    repository by SHA; the releases feed is the only thing they can watch to
    learn that a new version exists. `v1.0.0` predates this rule and has no
    release object.
+
+Publishing the release is what moves the consumer side: Dependabot opens a
+pin-bump PR in each subscribed consumer (every consumer except MTProto-Checker,
+whose pin is frozen by decision — see "Keeping consumer pins current" in
+`docs/design.md`). A human reviews and merges each one; auto-merge stays off,
+because the PR body carries the release notes and the first-line `cliff.toml`
+warning only works if someone reads it. Open, unmerged bump PRs are the signal
+that a consumer lags — there is no other fleet check.
 
 ## Load-bearing rules
 
