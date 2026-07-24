@@ -46,6 +46,11 @@ replay (six of seven — see "Fixture evidence" in `docs/design.md`). Run it
 before and after any edit to the changelog step; it is the regression net the
 fixture table used to only describe.
 
+`tools/check-docs.sh` asserts the drift-prone literals — the git-cliff and
+js-yaml version pins, `STABLE_RE`, and the current-release claims — against
+their authorities, which it extracts rather than re-types. It is wired into
+the release runbook below; see "The doc-fact check" in `docs/design.md`.
+
 ### On a runner: the only real proof
 
 Nothing here is believed until a runner has run it. The established procedure:
@@ -82,14 +87,19 @@ Prove the change on a runner first — see above. Tag the commit that ran.
 # 1. Tag locally, so the notes can be reviewed before the tag is public.
 git tag -a vX.Y.Z <sha-that-ran>
 
-# 2. Replay the changelog step against this repository itself. It renders with
+# 2. The docs must already name vX.Y.Z — README pin comments, design.md's
+#    "is current" claim, version literals. Drift here means the docs lag the
+#    release being cut; fix them before publishing.
+tools/check-docs.sh
+
+# 3. Replay the changelog step against this repository itself. It renders with
 #    this repo's own cliff.toml at the tag and runs both guards; the notes land
 #    at the temp path it prints.
 tools/replay.sh . vX.Y.Z
 
-# 3. Review the preserved notes. Wrong? `git tag -d vX.Y.Z` and start over.
+# 4. Review the preserved notes. Wrong? `git tag -d vX.Y.Z` and start over.
 
-# 4. Publish.
+# 5. Publish.
 git push origin vX.Y.Z
 gh release create vX.Y.Z --notes-file <preserved-notes-path>   # add --prerelease for rc tags
 ```

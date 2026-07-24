@@ -184,6 +184,39 @@ proof; the replay only decides whether a tag is worth spending on it.
 `tools/fixtures/run.sh` re-runs the fixture behaviours on top of this module —
 see "Fixture evidence" above for what it covers and what stays frozen.
 
+## The doc-fact check
+
+The same facts are deliberately restated across README.md, docs/design.md,
+CLAUDE.md, and the workflow — the documentation split serves different
+audiences and stays. What must not happen is the copies drifting apart with
+nothing to notice. `tools/check-docs.sh` asserts the mechanically decidable
+ones:
+
+- every `git-cliff@<version>` token and every "pinned at `<version>`" claim in
+  any tracked file names the version in `release.yml`;
+- every `js-yaml@<version>` token names the version in `tools/replay.sh`;
+- design.md quotes the workflow's `STABLE_RE` verbatim;
+- the current-release triplet agrees: README's `# vX.Y.Z` pin comments and
+  design.md's "`vX.Y.Z` is current. It marks `<sha>`" claim both match the
+  highest stable tag in the clone and the commit it peels to.
+
+Each authority is extracted from its file at run time, never re-typed — the
+same seam direction as the replay, for the same reason; even `STABLE_RE` is
+read out of the workflow rather than becoming a third copy of the regex.
+Version tokens are swept across all tracked files, so a new duplication site
+is covered the day it is written. The check is offline: release-object
+existence stays a runbook rule, because a network dependency in a drift check
+is how a drift check stops being run.
+
+Deliberately out of scope: prose. The pipefail ban is already netted
+mechanically by the fixture harness — adding `set -euo pipefail` to the step
+makes the no-links and empty fixtures mismatch — and the first-line
+release-notes rule has nothing local to assert against.
+
+While cutting a release, the check fails by design between updating the docs
+to the new version and the tag existing (or vice versa) — the runbook orders
+it after tagging so a green run means the docs and the tag agree.
+
 ## Absence of `set -euo pipefail`
 
 The `Generate changelog` step runs under GitHub's default `bash -e {0}` and
