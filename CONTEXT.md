@@ -21,6 +21,12 @@ carries exactly one commit link, every link points at the consumer, and any
 compare link points at the consumer.
 _Avoid_: shape check, output validation, lint
 
+**Fixture**:
+A recorded guard behaviour against a known artifact: a repository state plus
+the exact outcome line it must produce. Originally hand-verified evidence; six
+of the seven behaviours are now re-run through the replay.
+_Avoid_: test case, sample, golden file
+
 **Replay**:
 Local re-execution of the workflow's `Generate changelog` step — extracted
 verbatim from the workflow file, never re-typed — against a consumer checkout
